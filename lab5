@@ -136,19 +136,19 @@ GO
 
 -- 1) Создаем базу данных
 
-if DB_ID('SMART_HOME') is null
-begin
-    create database SMART_HOME
-    on primary
+IF DB_ID('SMART_HOME') IS NULL
+BEGIN
+    CREATE DATABASE SKI_RENT
+    ON PRIMARY
     (
-        name = 'SMART_HOME',
-        filename = '/Users/vsevolond/university/DB_2016/lab5/SmartHomeData_df.mdf',
+        name = 'SKI_RENT',
+        filename = 'D:\SKI_RENT.mdf',
         size = 10MB,
         maxsize = 100MB,
         filegrowth = 10MB
     )
-end
-go
+END
+GO
 
 -- 2) Создаем таблицу клиента
 
