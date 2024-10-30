@@ -39,8 +39,8 @@ INSERT INTO Customer(firstName, lastName, patronymic, contractDate) VALUES
 ('Анна', 'Иванова', 'Петровна', '2024-02-20');
 GO
 
-SELECT @@IDENTITY AS CustomerID;  -- Получение последнего сгенерированного значения IDENTITY
 SELECT SCOPE_IDENTITY() AS CustomerID_scope;  -- Получение последнего сгенерированного значения IDENTITY в текущей сессии
+SELECT @@IDENTITY AS CustomerID;  -- Получение последнего сгенерированного значения IDENTITY
 SELECT IDENT_CURRENT('Customer') AS CustomerID_current;  -- Получение последнего сгенерированного значения IDENTITY для указанной таблицы
 
 SELECT * FROM Customer;  
@@ -130,16 +130,16 @@ GO
 -- 5. Создать две связанные таблицы и протестировать на них различные варианты действий
 -- для ограничений ссылочной целостности (NO ACTION | CASCADE | SET | SET DEFAULT).
 
--- Удаляем таблицу Rental, если она существует
+
 DROP TABLE IF EXISTS Rental;
 
--- Удаляем таблицу EquipmentType, если она существует
+
 DROP TABLE IF EXISTS EquipmentType;
 
--- Создаем таблицу EquipmentType с добавленным столбцом price
+
 CREATE TABLE EquipmentType (
     name NVARCHAR(40) PRIMARY KEY,
-    price DECIMAL(10, 2) NOT NULL  -- Добавляем столбец price, который не допускает NULL
+    price DECIMAL(10, 2) NOT NULL  
 );
 
 -- Вставляем записи в таблицу EquipmentType с указанием цены
@@ -166,24 +166,16 @@ INSERT INTO Rental(rentalDate, returnDate, equipmentTypeName) VALUES
 ('2025-03-06', '2025-03-06', 'Snowboard Package');
 GO
 
--- Выбираем данные из таблицы Rental
-SELECT * FROM Rental;
-GO
 
--- Проверка данных в связанных таблицах
-SELECT * FROM EquipmentType;
-SELECT * FROM Rental;
-GO
 
--- Удаляем таблицу EquipmentTypeNoAction, если она существует
 DROP TABLE IF EXISTS EquipmentTypeNoAction;
 
--- Создаем таблицу EquipmentTypeNoAction
+
 CREATE TABLE EquipmentTypeNoAction (
     name NVARCHAR(40) PRIMARY KEY
 );
 
--- Вставляем данные в EquipmentTypeNoAction
+
 INSERT INTO EquipmentTypeNoAction(name) VALUES 
 ('Ski Package'), 
 ('Snowboard Package');
@@ -215,7 +207,7 @@ FOREIGN KEY (equipmentTypeName) REFERENCES EquipmentTypeSet(name)
 ON DELETE SET NULL;  -- Действие SET NULL
 GO
 
--- Проверяем, что действия работают
+
 -- Удаляем запись из EquipmentTypeSet и проверяем результат
 DELETE FROM EquipmentTypeSet WHERE name = 'Ski Package';
 
