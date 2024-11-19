@@ -298,3 +298,34 @@ GO
 -- 4.4) Демонстрация работы процедуры ProcessAndCheckCustomers
 EXEC ProcessAndCheckCustomers;
 GO
+
+
+
+
+
+-- 4.1) Создание табличной функции
+CREATE FUNCTION dbo.GetCustomersTable()
+RETURNS @ResultTable TABLE
+(
+    id INT,
+    firstName NVARCHAR(50),
+    lastName NVARCHAR(70),
+    patronymic NVARCHAR(70),
+    contractDate DATE,
+    FullName NVARCHAR(120)
+)
+AS
+BEGIN
+    INSERT INTO @ResultTable
+    SELECT 
+        id,
+        firstName,
+        lastName,
+        patronymic,
+        contractDate,
+        dbo.GetFullName(firstName, lastName) AS FullName
+    FROM Customer;
+
+    RETURN;
+END;
+GO
