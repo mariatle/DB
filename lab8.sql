@@ -1,3 +1,4 @@
+
 USE master;
 GO
 
@@ -44,36 +45,35 @@ INSERT INTO Customer(firstName, lastName, patronymic, contractDate) VALUES
 ('Ольга', 'Мельникова', 'Евгеньевна', '2022-10-25');
 GO
 
+
 -- 1) Создать хранимую процедуру, производящую выборку
 -- из некоторой таблицы и возвращающую результат
 -- выборки в виде курсора.
 
 
--- Создание хранимой процедуры, возвращающей курсор
 CREATE PROCEDURE SelectCustomers
     @customerCursor CURSOR VARYING OUTPUT
 AS
 BEGIN
-    -- Определение курсора для выборки из таблицы Customer
+   
     SET @customerCursor = CURSOR FOR
     SELECT id, firstName, lastName, patronymic, contractDate
     FROM Customer;
 
-    -- Открытие курсора
+    
     OPEN @customerCursor;
 END;
 GO
 
--- Пример использования хранимой процедуры
+-- Демонстрация работы
 DECLARE @cursor CURSOR;
 
--- Вызов процедуры с передачей курсора как параметра OUTPUT
 EXEC SelectCustomers @customerCursor = @cursor OUTPUT;
 
--- Переменные для хранения данных из курсора
+
 DECLARE @id INT, @firstName NVARCHAR(50), @lastName NVARCHAR(70), @patronymic NVARCHAR(70), @contractDate DATE;
 
--- Извлечение и вывод данных из курсора
+
 FETCH NEXT FROM @cursor INTO @id, @firstName, @lastName, @patronymic, @contractDate;
 
 WHILE @@FETCH_STATUS = 0
@@ -83,7 +83,7 @@ BEGIN
     FETCH NEXT FROM @cursor INTO @id, @firstName, @lastName, @patronymic, @contractDate;
 END
 
--- Закрытие и освобождение курсора
+
 CLOSE @cursor;
 DEALLOCATE @cursor;
 GO
@@ -93,7 +93,7 @@ GO
 -- формированием столбца, значение которого
 -- формируется пользовательской функцией.
 
--- 2.1) Создание пользовательской функции для формирования полного имени
+-- 2.1) Создание пользовательской функции
 CREATE FUNCTION dbo.GetFullName
 (
     @firstName NVARCHAR(50),
@@ -106,7 +106,7 @@ BEGIN
 END;
 GO
 
--- 2.2) Модификация хранимой процедуры SelectCustomers с добавлением нового столбца FullName, который формируется функцией
+-- 2.2) Изменение хранимой процедуры SelectCustomers с добавлением нового столбца FullName, который формируется функцией
 ALTER PROCEDURE SelectCustomers
     @customerCursor CURSOR VARYING OUTPUT
 AS
@@ -119,24 +119,24 @@ BEGIN
         lastName,
         patronymic,
         contractDate,
-        dbo.GetFullName(firstName, lastName) AS FullName -- Новый столбец, сформированный функцией
+        dbo.GetFullName(firstName, lastName) AS FullName 
     FROM Customer;
 
-    -- Открытие курсора
+
     OPEN @customerCursor;
 END;
 GO
 
--- Пример использования модифицированной хранимой процедуры
+
 DECLARE @cursor CURSOR;
 
--- Вызов процедуры с передачей курсора как параметра OUTPUT
+
 EXEC SelectCustomers @customerCursor = @cursor OUTPUT;
 
--- Переменные для хранения данных из курсора, включая новый столбец FullName
+
 DECLARE @id INT, @firstName NVARCHAR(50), @lastName NVARCHAR(70), @patronymic NVARCHAR(70), @contractDate DATE, @fullName NVARCHAR(120);
 
--- Извлечение и вывод данных из курсора
+
 FETCH NEXT FROM @cursor INTO @id, @firstName, @lastName, @patronymic, @contractDate, @fullName;
 
 WHILE @@FETCH_STATUS = 0
@@ -147,7 +147,7 @@ BEGIN
     FETCH NEXT FROM @cursor INTO @id, @firstName, @lastName, @patronymic, @contractDate, @fullName;
 END
 
--- Закрытие и освобождение курсора
+
 CLOSE @cursor;
 DEALLOCATE @cursor;
 GO
@@ -157,53 +157,69 @@ GO
 -- курсора и выводящую сообщения, сформированные из
 -- записей при выполнении условия, заданного еще одной
 -- пользовательской функцией.
-
-CREATE PROCEDURE CheckCustomerContracts
+-- 3.1) Создание пользовательской функции для проверки условия
+CREATE FUNCTION dbo.IsRecentContract
+(
+    @contractDate DATE
+)
+RETURNS BIT
 AS
 BEGIN
+    RETURN CASE 
+               WHEN @contractDate > DATEADD(YEAR, -3, GETDATE()) THEN 1
+               ELSE 0
+           END;
+END;
+GO
+
+-- 3.2) Создание хранимой процедуры, вызывающей SelectCustomers
+CREATE PROCEDURE ProcessCustomers
+AS
+BEGIN
+    -- Объявление курсора
     DECLARE @cursor CURSOR;
-    DECLARE @id INT, @firstName NVARCHAR(50), @lastName NVARCHAR(70), @patronymic NVARCHAR(70), @contractDate DATE;
     
-    -- Вызов процедуры для получения курсора
+    -- Вызов процедуры SelectCustomers
     EXEC SelectCustomers @customerCursor = @cursor OUTPUT;
 
-    -- Извлечение и вывод данных из курсора
-    FETCH NEXT FROM @cursor INTO @id, @firstName, @lastName, @patronymic, @contractDate;
+    -- Переменные для хранения значений текущей записи курсора
+    DECLARE @id INT, 
+            @firstName NVARCHAR(50), 
+            @lastName NVARCHAR(70), 
+            @patronymic NVARCHAR(70), 
+            @contractDate DATE, 
+            @fullName NVARCHAR(120);
+
+    -- Прокрутка курсора
+    FETCH NEXT FROM @cursor INTO @id, @firstName, @lastName, @patronymic, @contractDate, @fullName;
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        -- Проверка условия с использованием функции CheckContractYear
-        IF dbo.CheckContractYear(@contractDate) = 1
+        -- Проверка условия с помощью функции dbo.IsRecentContract
+        IF dbo.IsRecentContract(@contractDate) = 1
         BEGIN
-            PRINT 'ID: ' + CAST(@id AS NVARCHAR(10)) + ', First Name: ' + @firstName + ', Last Name: ' + @lastName + 
-                  ', Patronymic: ' + ISNULL(@patronymic, 'NULL') + ', Contract Date: ' + CAST(@contractDate AS NVARCHAR(10)) + 
-                  ' (Contract Year >= 2022)';
-        END
-        ELSE
-        BEGIN
-            PRINT 'ID: ' + CAST(@id AS NVARCHAR(10)) + ', First Name: ' + @firstName + ', Last Name: ' + @lastName + 
-                  ', Patronymic: ' + ISNULL(@patronymic, 'NULL') + ', Contract Date: ' + CAST(@contractDate AS NVARCHAR(10)) + 
-                  ' (Contract Year < 2022)';
-        END
+            PRINT 'Recent Contract - Full Name: ' + @fullName + ', Contract Date: ' + CAST(@contractDate AS NVARCHAR(10));
+        END;
 
-        FETCH NEXT FROM @cursor INTO @id, @firstName, @lastName, @patronymic, @contractDate;
-    END
+        FETCH NEXT FROM @cursor INTO @id, @firstName, @lastName, @patronymic, @contractDate, @fullName;
+    END;
 
-    -- Закрытие и освобождение курсора
+    -- Закрытие и освобождение ресурсов курсора
     CLOSE @cursor;
     DEALLOCATE @cursor;
 END;
 GO
 
+-- Демонстрация работы процедуры ProcessCustomers
+EXEC ProcessCustomers;
+GO
+
+
 -- 4) Модифицировать хранимую процедуру п.2. таким образом, чтобы выборка формировалась с помощью табличной функции.
 -- Процедура, использующая табличную функцию и выполняющая дополнительные проверки
 
-IF OBJECT_ID('CheckCustomerContracts', 'P') IS NOT NULL
-    DROP PROCEDURE CheckCustomerContracts;
-GO
-
--- 2. Создание табличной функции GetCustomersWithFullName, которая формирует полный список с полным именем
-CREATE FUNCTION dbo.GetCustomersWithFullName()
+-- 4.1) Создание табличной функции
+CREATE FUNCTION dbo.GetCustomersTable()
 RETURNS TABLE
 AS
 RETURN
@@ -214,62 +230,71 @@ RETURN
         lastName,
         patronymic,
         contractDate,
-        -- Формирование полного имени с использованием конкатенации
-        firstName + ' ' + lastName AS FullName
+        dbo.GetFullName(firstName, lastName) AS FullName
     FROM Customer
 );
 GO
 
--- 3. Создание хранимой процедуры CheckCustomerContracts, которая использует курсор для прокрутки данных из табличной функции
-CREATE PROCEDURE CheckCustomerContracts
+-- 4.2) Изменение хранимой процедуры SelectCustomers для использования табличной функции
+ALTER PROCEDURE SelectCustomers
+    @customerCursor CURSOR VARYING OUTPUT
 AS
 BEGIN
-    -- Объявление переменных для хранения данных из курсора
-    DECLARE @id INT, @firstName NVARCHAR(50), @lastName NVARCHAR(70), 
-            @patronymic NVARCHAR(70), @contractDate DATE, @fullName NVARCHAR(120);
+    -- Определение курсора для выборки из табличной функции dbo.GetCustomersTable
+    SET @customerCursor = CURSOR FOR
+    SELECT *
+    FROM dbo.GetCustomersTable();
 
-    -- Объявление курсора для выборки данных из табличной функции GetCustomersWithFullName
-    DECLARE customer_cursor CURSOR FOR
-    SELECT id, firstName, lastName, patronymic, contractDate, FullName
-    FROM dbo.GetCustomersWithFullName();
-
-    -- Открытие курсора
-    OPEN customer_cursor;
-
-    -- Извлечение первой строки из курсора
-    FETCH NEXT FROM customer_cursor INTO @id, @firstName, @lastName, @patronymic, @contractDate, @fullName;
-
-    -- Цикл обработки каждой записи
-    WHILE @@FETCH_STATUS = 0
-    BEGIN
-        -- Проверка условия с использованием функции CheckContractYear
-        IF dbo.CheckContractYear(@contractDate) = 1
-        BEGIN
-            -- Вывод сообщения, если контракт с годом >= 2022
-            PRINT 'ID: ' + CAST(@id AS NVARCHAR(10)) + 
-                  ', Full Name: ' + @fullName + 
-                  ', Contract Date: ' + CAST(@contractDate AS NVARCHAR(10)) + 
-                  ' (Contract Year >= 2022)';
-        END
-        ELSE
-        BEGIN
-            -- Вывод сообщения, если контракт с годом < 2022
-            PRINT 'ID: ' + CAST(@id AS NVARCHAR(10)) + 
-                  ', Full Name: ' + @fullName + 
-                  ', Contract Date: ' + CAST(@contractDate AS NVARCHAR(10)) + 
-                  ' (Contract Year < 2022)';
-        END
-
-        -- Извлечение следующей строки
-        FETCH NEXT FROM customer_cursor INTO @id, @firstName, @lastName, @patronymic, @contractDate, @fullName;
-    END
-
-    -- Закрытие и освобождение курсора
-    CLOSE customer_cursor;
-    DEALLOCATE customer_cursor;
+    OPEN @customerCursor;
 END;
 GO
 
--- 4. Использование процедуры
-EXEC CheckCustomerContracts;
+-- 4.3) Создание новой процедуры, использующей SelectCustomers и выполняющей дополнительные проверки
+CREATE PROCEDURE ProcessAndCheckCustomers
+AS
+BEGIN
+    -- Объявление курсора
+    DECLARE @cursor CURSOR;
+
+    -- Вызов процедуры SelectCustomers
+    EXEC SelectCustomers @customerCursor = @cursor OUTPUT;
+
+    -- Переменные для хранения значений текущей записи курсора
+    DECLARE @id INT,
+            @firstName NVARCHAR(50),
+            @lastName NVARCHAR(70),
+            @patronymic NVARCHAR(70),
+            @contractDate DATE,
+            @fullName NVARCHAR(120);
+
+    -- Прокрутка курсора
+    FETCH NEXT FROM @cursor INTO @id, @firstName, @lastName, @patronymic, @contractDate, @fullName;
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Дополнительная проверка: контракт должен быть заключён не ранее 2023 года
+        IF @contractDate >= '2023-01-01'
+        BEGIN
+            PRINT 'Valid Contract - ID: ' + CAST(@id AS NVARCHAR(10)) + 
+                  ', Full Name: ' + @fullName + 
+                  ', Contract Date: ' + CAST(@contractDate AS NVARCHAR(10));
+        END
+        ELSE
+        BEGIN
+            PRINT 'Ignored Contract - ID: ' + CAST(@id AS NVARCHAR(10)) + 
+                  ', Full Name: ' + @fullName + 
+                  ', Contract Date: ' + CAST(@contractDate AS NVARCHAR(10));
+        END;
+
+        FETCH NEXT FROM @cursor INTO @id, @firstName, @lastName, @patronymic, @contractDate, @fullName;
+    END;
+
+    -- Закрытие и освобождение ресурсов курсора
+    CLOSE @cursor;
+    DEALLOCATE @cursor;
+END;
+GO
+
+-- 4.4) Демонстрация работы процедуры ProcessAndCheckCustomers
+EXEC ProcessAndCheckCustomers;
 GO
