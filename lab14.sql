@@ -1,13 +1,13 @@
--- Работа с первой базой данных lab13db1
+
 USE lab13db1;
 GO
 
--- Удаление таблицы Equipment, если она существует
+
 IF OBJECT_ID(N'Equipment') IS NOT NULL
 	DROP TABLE Equipment;
 GO
 
--- Создание таблицы Equipment для первой базы данных
+
 CREATE TABLE Equipment
 (
 	EquipmentID INT PRIMARY KEY NOT NULL,
@@ -17,16 +17,16 @@ CREATE TABLE Equipment
 );
 GO
 
--- Работа со второй базой данных lab13db2
+
 USE lab13db2;
 GO
 
--- Удаление таблицы Equipment, если она существует
+
 IF OBJECT_ID(N'Equipment') IS NOT NULL
 	DROP TABLE Equipment;
 GO
 
--- Создание таблицы Equipment для второй базы данных
+
 CREATE TABLE Equipment
 (
 	EquipmentID INT PRIMARY KEY NOT NULL,
@@ -40,7 +40,7 @@ IF OBJECT_ID(N'EquipmentView') IS NOT NULL
 	DROP VIEW EquipmentView;
 GO
 
--- Создание представления EquipmentView
+
 CREATE VIEW EquipmentView AS
 SELECT 
     first.EquipmentID, 
@@ -54,14 +54,12 @@ JOIN lab13db2.dbo.Equipment AS second
 ON first.EquipmentID = second.EquipmentID;
 GO
 
-SELECT * FROM EquipmentView
 
--- Удаление триггера на вставку, если он существует
 IF OBJECT_ID(N'trg_Insert_EquipmentView') IS NOT NULL
 	DROP TRIGGER trg_Insert_EquipmentView;
 GO
 
--- Создание триггера на вставку
+
 CREATE TRIGGER trg_Insert_EquipmentView ON EquipmentView
 INSTEAD OF INSERT
 AS
@@ -127,22 +125,22 @@ BEGIN
 END;
 GO
 
--- Обновление данных через представление
+
 UPDATE EquipmentView
 SET Model = 'Updated Model', RentalPrice = 200.00
 WHERE EquipmentID = 1;
 GO
 
--- Проверка данных после обновления
+
 SELECT * FROM EquipmentView ORDER BY EquipmentID;
 GO
 
--- Удаление триггера на удаление, если он существует
+
 IF OBJECT_ID(N'trg_Delete_EquipmentView') IS NOT NULL
 	DROP TRIGGER trg_Delete_EquipmentView;
 GO
 
--- Создание триггера на удаление
+
 CREATE TRIGGER trg_Delete_EquipmentView ON EquipmentView
 INSTEAD OF DELETE
 AS
@@ -155,11 +153,11 @@ BEGIN
 END;
 GO
 
--- Удаление данных через представление
+
 DELETE FROM EquipmentView WHERE EquipmentID = 2;
 GO
 
--- Проверка данных после удаления
+
 SELECT * FROM EquipmentView;
 SELECT * FROM lab13db1.dbo.Equipment;
 SELECT * FROM lab13db2.dbo.Equipment;
