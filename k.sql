@@ -22,8 +22,10 @@ GO
 USE lab11;
 GO
 
--- Создание и заполнение таблиц
--- Таблица Client
+IF OBJECT_ID(N'Client') IS NOT NULL
+	DROP TABLE Client;
+GO
+
 CREATE TABLE Client (
     client_id INT PRIMARY KEY IDENTITY(1,1),
     phone_number VARCHAR(15) NOT NULL,
@@ -34,13 +36,49 @@ CREATE TABLE Client (
 );
 GO
 
-INSERT INTO Client (phone_number, first_name, last_name, middle_name, email)
-VALUES
-('9876543210', 'Анна', 'Смирнова', 'Петровна', 'anna.smirnova@example.com'),
-('8765432109', 'Олег', 'Кузнецов', '',  'oleg.kuznetsov@example.com');
+IF OBJECT_ID(N'TempClient') IS NOT NULL
+	DROP TABLE TempClient;
 GO
 
--- Таблица Rental_Agreement
+CREATE TABLE TempClient (
+    client_id INT PRIMARY KEY IDENTITY(1,1),
+    phone_number VARCHAR(15) NOT NULL,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    middle_name VARCHAR(50) DEFAULT 'Не указано',  
+    email VARCHAR(100) UNIQUE 
+);
+GO
+
+INSERT INTO TempClient (phone_number, first_name, last_name, middle_name, email)
+VALUES
+('1234567890', 'Мария', 'Иванова', 'Александровна', 'maria.ivanova@example.com'),
+('2345678901', 'Дмитрий', 'Сидоров', NULL, 'dmitry.sidorov@example.com'),
+('3456789012', 'Екатерина', 'Федорова', 'Васильевна', 'ekaterina.fedorova@example.com'),
+('4567890123', 'Александр', 'Новиков', '', 'alex.novikov@example.com'),
+('5678901234', 'Ольга', 'Морозова', 'Ивановна', 'olga.morozova@example.com'),
+('6789012345', 'Виктор', 'Климов', 'Сергеевич', 'viktor.klimov@example.com'),
+('1234567891', 'Игорь', 'Соколов', 'Сергеевич', 'igor.sokolov@example.com');
+GO
+
+
+INSERT INTO Client (phone_number, first_name, last_name, middle_name, email)
+SELECT phone_number, first_name, last_name, middle_name, email
+FROM TempClient
+WHERE NOT EXISTS (
+    SELECT 1 
+    FROM Client 
+    WHERE Client.phone_number = TempClient.phone_number
+);
+
+SELECT * FROM Client
+
+GO
+
+IF OBJECT_ID(N'Rental_Agreement') IS NOT NULL
+	DROP TABLE Rental_Agreement;
+GO
+
 CREATE TABLE Rental_Agreement (
     agreement_id INT PRIMARY KEY IDENTITY(1,1),
     client_id INT NOT NULL,
@@ -54,13 +92,33 @@ CREATE TABLE Rental_Agreement (
 );
 GO
 
+
+SELECT * FROM Rental_Agreement
+
+ALTER TABLE Rental_Agreement
+ADD column_name VARCHAR(10);
+
+ALTER TABLE Rental_Agreement
+DROP COLUMN column_name ;
+
+
+
 INSERT INTO Rental_Agreement (client_id, start_date, end_date, agreement_date, total_cost)
 VALUES
-(1, '2024-12-20', '2024-12-25', '2024-12-20', 500.00), 
-(2, '2024-12-22', '2024-12-27', '2024-12-22', 600.00);
+(1, '2023-01-15', '2023-01-20', '2023-01-10', 1200.00), 
+(2, '2023-06-05', '2023-06-10', '2023-06-01', 750.00), 
+(3, '2024-02-10', '2024-02-15', '2024-02-08', 950.00), 
+(4, '2022-07-20', '2022-07-25', '2022-07-18', 1400.00), 
+(5, '2025-03-05', '2025-03-10', '2025-03-02', 880.00), 
+(6, '2023-10-10', '2023-10-15', '2023-10-07', 640.00), 
+(7, '2022-05-01', '2022-05-05', '2022-04-28', 520.00);
+
+
+
+IF OBJECT_ID(N'Equipment') IS NOT NULL
+	DROP TABLE Equipment;
 GO
 
--- Таблица Equipment
 CREATE TABLE Equipment (
     equipment_id INT PRIMARY KEY IDENTITY(1,1),
     equipment_name VARCHAR(100) NOT NULL,
@@ -73,12 +131,24 @@ GO
 
 INSERT INTO Equipment (equipment_name, equipment_type, manufacturer, model, rental_cost)
 VALUES
-('Лыжи', 'Горнолыжное снаряжение', 'Rossignol', 'Hero Elite', 300.00),
-('Лыжные ботинки', 'Горнолыжное снаряжение', 'Salomon', 'X-Pro 120', 200.00),
-('Палки лыжные', 'Горнолыжное снаряжение', 'Leki', 'Carbon 14', 100.00);
+('Горные лыжи', 'Лыжное оборудование', 'Atomic', 'Redster X7', 320.00),
+('Лыжные ботинки', 'Лыжное оборудование', 'Head', 'Vector 120S', 250.00),
+('Лыжные палки', 'Лыжное оборудование', 'Komperdell', 'Nationalteam Carbon', 150.00),
+('Шлем лыжный', 'Защитное снаряжение', 'Giro', 'Range MIPS', 180.00),
+('Горнолыжные перчатки', 'Одежда', 'Reusch', 'Volcano Pro', 100.00),
+('Маска лыжная', 'Защитное снаряжение', 'Oakley', 'Flight Deck', 140.00),
+('Куртка горнолыжная', 'Одежда', 'Columbia', 'Powder Lite', 400.00),
+('Брюки горнолыжные', 'Одежда', 'The North Face', 'Freedom Insulated', 300.00),
+('Сноуборд', 'Сноубордическое оборудование', 'Burton', 'Custom X', 500.00),
+('Сноубордические ботинки', 'Сноубордическое оборудование', 'DC', 'Phase', 220.00);
 GO
 
--- Таблица Instance
+
+IF OBJECT_ID(N'Instance') IS NOT NULL
+	DROP TABLE Instance;
+GO
+
+
 CREATE TABLE Instance (
     instance_id INT PRIMARY KEY IDENTITY(1,1),
     inventory_number VARCHAR(50) NOT NULL UNIQUE,
@@ -93,12 +163,36 @@ GO
 
 INSERT INTO Instance (inventory_number, size, condition, equipment_id)
 VALUES
-('SKI001', '175 см', 'Новое', 1), 
-('SKI002', '180 см', 'Хорошее', 1), 
-('BOOT001', '42', 'Новое', 2), 
-('BOOT002', '44', 'Хорошее', 2), 
-('POLE001', '120 см', 'Новое', 3), 
-('POLE002', '125 см', 'Хорошее', 3);
+-- Горные лыжи
+('SKI003', '170 см', 'Новое', 1), 
+('SKI004', '185 см', 'Удовлетворительное', 1), 
+-- Лыжные ботинки
+('BOOT003', '43', 'Новое', 2), 
+('BOOT004', '45', 'Удовлетворительное', 2), 
+-- Лыжные палки
+('POLE003', '115 см', 'Новое', 3), 
+('POLE004', '130 см', 'Удовлетворительное', 3), 
+-- Шлемы лыжные
+('HELM001', 'M', 'Новое', 4), 
+('HELM002', 'L', 'Хорошее', 4), 
+-- Горнолыжные перчатки
+('GLOVE001', 'S', 'Новое', 5), 
+('GLOVE002', 'M', 'Хорошее', 5), 
+-- Маски лыжные
+('MASK001', '-', 'Новое', 6), 
+('MASK002', '-', 'Хорошее', 6), 
+-- Куртки горнолыжные
+('JACKET001', 'M', 'Новое', 7), 
+('JACKET002', 'L', 'Удовлетворительное', 7), 
+-- Брюки горнолыжные
+('PANTS001', 'M', 'Новое', 8), 
+('PANTS002', 'L', 'Хорошее', 8), 
+-- Сноуборды
+('SNOW001', '150 см', 'Новое', 9), 
+('SNOW002', '160 см', 'Хорошее', 9), 
+-- Сноубордические ботинки
+('SNOWBOOT001', '41', 'Новое', 10), 
+('SNOWBOOT002', '42', 'Хорошее', 10);
 GO
 
 -- Таблица Rental_Instance
@@ -132,33 +226,67 @@ GO
 CREATE INDEX idx_equipment_id ON Instance(equipment_id);
 GO
 
--- Функция для вычисления общей стоимости аренды
-CREATE FUNCTION CalculateRentalCost (@agreement_id INT)
+
+
+-- вычисляет общую стоимость аренды на основе связанного оборудования
+CREATE FUNCTION dbo.CalculateRentalCost (@agreement_id INT)
 RETURNS DECIMAL(10,2)
 AS
 BEGIN
     DECLARE @total_cost DECIMAL(10,2);
 
-    -- Вычисление стоимости аренды на основе количества дней аренды и стоимости оборудования
-    SELECT @total_cost = SUM(e.rental_cost)
+    -- Проверка существования соглашения
+    IF NOT EXISTS (SELECT 1 FROM Rental_Agreement WHERE agreement_id = @agreement_id)
+    BEGIN
+        RETURN 0;
+    END
+
+    -- Вычисление стоимости аренды с учетом возможных NULL значений
+    SELECT @total_cost = SUM(COALESCE(e.rental_cost, 0))
     FROM Rental_Instance ri
     JOIN Instance i ON ri.instance_id = i.instance_id
     JOIN Equipment e ON i.equipment_id = e.equipment_id
     JOIN Rental_Agreement ra ON ri.rental_id = ra.agreement_id
-    WHERE ra.agreement_id = @agreement_id
-    AND ra.start_date <= GETDATE() AND ra.end_date >= GETDATE();
+    WHERE ra.agreement_id = @agreement_id;
 
     RETURN @total_cost;
 END;
-GO
+
+---------------------------------------------------------------------
+SELECT ri.rental_id, ri.instance_id, i.equipment_id, e.rental_cost
+FROM Rental_Instance ri
+JOIN Instance i ON ri.instance_id = i.instance_id
+JOIN Equipment e ON i.equipment_id = e.equipment_id
+WHERE ri.rental_id IN (1, 2, 3);
+
+
+SELECT *
+FROM Rental_Instance
+WHERE rental_id = 2;
+
+
+SELECT dbo.CalculateRentalCost(1) AS TotalCost_Rental_1;
+SELECT dbo.CalculateRentalCost(2) AS TotalCost_Rental_2;
+SELECT dbo.CalculateRentalCost(3) AS TotalCost_Rental_3;
+--------------------------------------------------------------------
+
+
+-- до апд
+SELECT agreement_id, total_cost
+FROM Rental_Agreement
+WHERE agreement_id = 1;
 
 -- Обновить стоимость аренды в договоре
 UPDATE Rental_Agreement
 SET total_cost = dbo.CalculateRentalCost(1)
 WHERE agreement_id = 1;
 
+-- после апд
+SELECT agreement_id, total_cost
+FROM Rental_Agreement
+WHERE agreement_id = 1;
 
--- Хранимая процедура
+-- обновляет общую стоимость аренды в таблице Rental_Agreement на основе количества арендуемого оборудования
 CREATE PROCEDURE CalculateTotalRentalCost
     @agreement_id INT
 AS
@@ -175,17 +303,76 @@ BEGIN
 END;
 GO
 
--- Триггер
+-- Выполним вызов процедуры для обновления общей стоимости аренды по договору с ID 1
+EXEC CalculateTotalRentalCost @agreement_id = 3;
+
+-- Проверим обновленную стоимость аренды в таблице Rental_Agreement
+SELECT agreement_id, total_cost
+FROM Rental_Agreement
+WHERE agreement_id = 3;
+
+DROP TRIGGER trg_UpdateRentalCost;
+
 CREATE TRIGGER trg_UpdateRentalCost
 ON Rental_Instance
 AFTER INSERT, DELETE
 AS
 BEGIN
+    -- Объявляем переменную для rental_id
     DECLARE @rental_id INT;
-    SELECT @rental_id = rental_id FROM inserted;
-    EXEC CalculateTotalRentalCost @rental_id;
+
+    -- Для добавленных записей
+    IF EXISTS (SELECT 1 FROM inserted)
+    BEGIN
+        -- Обновляем стоимость аренды, добавляя стоимость нового экземпляра
+        UPDATE Rental_Agreement
+        SET total_cost = (
+            SELECT SUM(e.rental_cost)
+            FROM Rental_Instance ri
+            JOIN Instance i ON ri.instance_id = i.instance_id
+            JOIN Equipment e ON i.equipment_id = e.equipment_id
+            WHERE ri.rental_id = (SELECT rental_id FROM inserted)
+        )
+        WHERE agreement_id = (SELECT rental_id FROM inserted);
+    END
+
+    -- Для удаленных записей
+    IF EXISTS (SELECT 1 FROM deleted)
+    BEGIN
+        -- Обновляем стоимость аренды, вычитая стоимость удаленного экземпляра
+        UPDATE Rental_Agreement
+        SET total_cost = (
+            SELECT SUM(e.rental_cost)
+            FROM Rental_Instance ri
+            JOIN Instance i ON ri.instance_id = i.instance_id
+            JOIN Equipment e ON i.equipment_id = e.equipment_id
+            WHERE ri.rental_id = (SELECT rental_id FROM deleted)
+        )
+        WHERE agreement_id = (SELECT rental_id FROM deleted);
+    END
 END;
 GO
+
+------------------------------------------------------------------------------------------------------------------------
+-- Вставляем новый экземпляр с rental_id = 1
+INSERT INTO Rental_Instance (rental_id, instance_id)
+VALUES (1, 8);  -- Пример добавления нового экземпляра
+
+-- Проверяем обновленную стоимость аренды
+SELECT agreement_id, total_cost
+FROM Rental_Agreement
+WHERE agreement_id = 1;
+
+
+-- Удаляем запись с instance_id = 8 для аренды с rental_id = 1
+DELETE FROM Rental_Instance
+WHERE rental_id = 1 AND instance_id = 8;
+
+-- Проверяем обновленную стоимость аренды
+SELECT agreement_id, total_cost
+FROM Rental_Agreement
+WHERE agreement_id = 1;
+------------------------------------------------------------------------------------------------------------------------
 
 -- Представления
 CREATE VIEW ClientRentalInfo AS
@@ -193,6 +380,9 @@ SELECT c.client_id, c.first_name, c.last_name, c.phone_number, ra.agreement_id, 
 FROM Client c
 JOIN Rental_Agreement ra ON c.client_id = ra.client_id;
 GO
+
+
+
 
 -- Примеры запросов с JOIN
 
@@ -207,6 +397,13 @@ SELECT c.first_name, c.last_name, ra.agreement_id
 FROM Client c
 LEFT JOIN Rental_Agreement ra ON c.client_id = ra.client_id;
 GO
+
+-- RIGHT JOIN: Все договоры аренды, включая те, которые не привязаны к клиентам
+SELECT c.first_name, c.last_name, ra.agreement_id
+FROM Client c
+RIGHT JOIN Rental_Agreement ra ON c.client_id = ra.client_id;
+GO
+
 
 -- FULL OUTER JOIN: Все клиенты и все договоры
 SELECT c.first_name, c.last_name, ra.agreement_id
@@ -231,3 +428,14 @@ FROM Client c
 JOIN Rental_Agreement ra ON c.client_id = ra.client_id
 ORDER BY c.first_name ASC, c.last_name ASC;
 GO
+
+
+-- Группировка по типу оборудования и подсчет количества каждого типа
+SELECT equipment_type, COUNT(*) AS Количество
+FROM Equipment
+GROUP BY equipment_type;
+
+
+SELECT first_name, last_name FROM Client
+UNION
+SELECT first_name, last_name FROM TempClient;
