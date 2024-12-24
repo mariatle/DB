@@ -1,204 +1,218 @@
-USE master;
-GO
--- 1) Создать две базы данных на одном экземпляре СУБД SQL Server 2012
+USE lab13db1
+go
 
-IF DB_ID('lab13db1') IS NOT NULL
-    DROP DATABASE lab13db1;
-GO
+IF OBJECT_ID(N'TypeOfAgreement') IS NOT NULL
+	DROP TABLE TypeOfAgreement;
+go
 
-IF DB_ID('lab13db2') IS NOT NULL
-    DROP DATABASE lab13db2;
-GO
-
-CREATE DATABASE lab13db1
-ON 
-(
-    NAME = lab13db1,
-    FILENAME = 'D:\lab13db1.mdf',
-    SIZE = 10,
-    MAXSIZE = UNLIMITED, 
-    FILEGROWTH = 5%
-)
-GO 
-
-CREATE DATABASE lab13db2 
-ON 
-(
-    NAME = lab13db2,
-    FILENAME = 'D:\lab13db2.mdf',
-    SIZE = 10,
-    MAXSIZE = UNLIMITED, 
-    FILEGROWTH = 5%
+CREATE TABLE TypeOfAgreement(
+	Name NVarChar(100) PRIMARY KEY NOT NULL,
+	Description NVarChar(500),
+	AgreementDuration INT NULL,  -- Продолжительность аренды в днях
+	DepositRequired BIT NULL
 );
-GO
 
+USE lab13db2
+go
 
+IF OBJECT_ID(N'Agreement') IS NOT NULL
+	DROP TABLE Agreement;
+go
 
-USE lab13db1;
-GO
-
-DROP TABLE IF EXISTS CLIENT;
-GO
-
-CREATE TABLE CLIENT (
-    client_id INT IDENTITY(1, 1) PRIMARY KEY,
-    name NVARCHAR(100) NOT NULL,
-    email NVARCHAR(100) UNIQUE NOT NULL,
-    max_rentals TINYINT DEFAULT 3 
+CREATE TABLE Agreement(
+	ID INT IDENTITY(1,1) PRIMARY KEY NOT NULL, 
+	Name NVarChar(100) NOT NULL,
+	StartTime SmallDateTime NOT NULL DEFAULT GETDATE(),
+	EndTime SmallDateTime NULL,
+	TypeOfAgreementName NVarChar(100) NOT NULL,  -- Ссылка на тип соглашения
+	CustomerID INT NOT NULL,                    -- Идентификатор клиента
+	TotalAmount FLOAT NULL,                     -- Общая сумма аренды
+	DepositAmount FLOAT NULL,                   -- Сумма залога
+	AgreementStatus NVarChar(50) NULL           -- Статус соглашения (например, "Активно", "Завершено")
 );
-GO
+go
 
-DROP TABLE IF EXISTS RENTAL;
-GO
+USE lab13db2
+go
 
-CREATE TABLE RENTAL (
-    rental_id INT IDENTITY(1, 1) PRIMARY KEY,
-    client_id INT NOT NULL,
-    equipment_id INT NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NULL,
-    FOREIGN KEY (client_id) REFERENCES CLIENT(client_id)
-);
-GO
+IF OBJECT_ID(N'AgreementView') IS NOT NULL
+	DROP VIEW AgreementView;
+go
+
+CREATE VIEW AgreementView AS
+	SELECT 
+		a.ID, 
+		a.Name, 
+		a.StartTime, 
+		a.EndTime, 
+		a.TotalAmount, 
+		a.DepositAmount, 
+		a.AgreementStatus, 
+		t.Description AS TypeOfAgreementDescription, 
+		t.AgreementDuration, 
+		t.DepositRequired
+	FROM Agreement AS a
+	INNER JOIN lab13db1.dbo.TypeOfAgreement AS t 
+		ON a.TypeOfAgreementName = t.Name;
+go
+
+select * from AgreementView
+
+USE lab13db1
+go
+
+IF OBJECT_ID(N'Type_delete_trg') IS NOT NULL
+	DROP TRIGGER Type_delete_trg;
+go
+
+IF OBJECT_ID(N'Type_update_trg') IS NOT NULL
+	DROP TRIGGER Type_update_trg;
+go
 
 
-
-USE lab13db2;
-GO
-
-DROP TABLE IF EXISTS EQUIPMENT_ITEM;
-GO
-
-CREATE TABLE EQUIPMENT_ITEM (
-    equipment_id INT IDENTITY(1, 1) PRIMARY KEY,
-    name NVARCHAR(50) NOT NULL,
-    serial_number NVARCHAR(20) UNIQUE NOT NULL,
-    category NVARCHAR(20) NOT NULL CHECK (category IN ('ski', 'snowboard', 'boots')), 
-    status NVARCHAR(10) DEFAULT 'available' CHECK (status IN ('available', 'rented')) 
-);
-GO
-
--- 4) Триггеры в базе данных lab13db1
-
-USE lab13db1;
-GO
-
--- Ограничение на максимальное количество аренд у клиента
-CREATE TRIGGER OnInsertRental
-ON RENTAL
-INSTEAD OF INSERT
-AS
+CREATE TRIGGER TypeOfAgreement_delete_trg 
+ON lab13db1.dbo.TypeOfAgreement
+FOR DELETE AS
 BEGIN
-    DECLARE @client_id INT, @equipment_id INT, @start_date DATE;
+    DELETE a
+    FROM lab13db2.dbo.Agreement AS a
+    INNER JOIN deleted AS d
+    ON a.TypeOfAgreementName = d.Name;
+END
+go
 
-    SELECT @client_id = client_id, @equipment_id = equipment_id, @start_date = start_date
-    FROM inserted;
-
-    -- Проверка существования клиента
-    IF NOT EXISTS (SELECT 1 FROM CLIENT WHERE client_id = @client_id)
-        RAISERROR('Клиент не найден.', 11, 1);
-
-    -- Проверка доступности снаряжения
-    IF NOT EXISTS (SELECT 1 FROM lab13db2.dbo.EQUIPMENT_ITEM WHERE equipment_id = @equipment_id AND status = 'available')
-        RAISERROR('Снаряжение недоступно для аренды.', 11, 1);
-
-    -- Проверка текущего количества аренд у клиента
-    DECLARE @current_rentals INT;
-    SELECT @current_rentals = COUNT(*)
-    FROM RENTAL
-    WHERE client_id = @client_id AND end_date IS NULL;
-
-    DECLARE @max_rentals TINYINT;
-    SELECT @max_rentals = max_rentals FROM CLIENT WHERE client_id = @client_id;
-
-    IF @current_rentals >= @max_rentals
-        RAISERROR('Превышено максимальное количество аренд для клиента.', 11, 1);
-
-    -- Добавление аренды
-    INSERT INTO RENTAL (client_id, equipment_id, start_date)
-    VALUES (@client_id, @equipment_id, @start_date);
-
-    -- Обновление статуса снаряжения
-    UPDATE lab13db2.dbo.EQUIPMENT_ITEM
-    SET status = 'rented'
-    WHERE equipment_id = @equipment_id;
-END;
-GO
-
--- Триггер для завершения аренды
-CREATE TRIGGER OnUpdateRental
-ON RENTAL
-INSTEAD OF UPDATE
-AS
+CREATE TRIGGER TypeOfAgreement_update_trg
+ON lab13db1.dbo.TypeOfAgreement
+FOR UPDATE AS
 BEGIN
-    DECLARE @rental_id INT, @end_date DATE;
+    IF UPDATE(Name)
+    BEGIN
+        RAISERROR('Нельзя менять название у созданного типа соглашения', 16, 1);
+        ROLLBACK;
+    END
+END
+go
 
-    SELECT @rental_id = rental_id, @end_date = end_date
-    FROM inserted;
+USE lab13db2
+go
 
-    -- Завершение аренды
-    UPDATE RENTAL
-    SET end_date = @end_date
-    WHERE rental_id = @rental_id;
+IF OBJECT_ID(N'Agreement_insert_trg') IS NOT NULL
+	DROP TRIGGER Agreement_insert_trg;
+go
 
-    -- Обновление статуса снаряжения
-    DECLARE @equipment_id INT;
-    SELECT @equipment_id = equipment_id FROM RENTAL WHERE rental_id = @rental_id;
+IF OBJECT_ID(N'Agreement_update_trg') IS NOT NULL
+	DROP TRIGGER Agreement_update_trg;
+go
 
-    UPDATE lab13db2.dbo.EQUIPMENT_ITEM
-    SET status = 'available'
-    WHERE equipment_id = @equipment_id;
-END;
-GO
+-- Триггер для обновления данных в Agreement
+CREATE TRIGGER Agreement_update_trg ON Agreement
+FOR UPDATE AS
+BEGIN
+    IF UPDATE(TypeOfAgreementName) 
+    AND EXISTS (
+        SELECT 1 
+        FROM lab13db1.dbo.TypeOfAgreement AS type
+        RIGHT JOIN inserted ON inserted.TypeOfAgreementName = type.Name
+        WHERE type.Name IS NULL -- Если в TypeOfAgreement нет соответствующего типа соглашения
+    )
+    BEGIN
+        RAISERROR('При обновлении необходимо выбрать существующий тип соглашения', 16, 1);
+        ROLLBACK;
+    END
+END
+go
 
--- 5) Представление для удобства работы
+-- Триггер для вставки данных в Agreement
+CREATE TRIGGER Agreement_insert_trg ON Agreement
+FOR INSERT AS
+BEGIN
+    IF EXISTS (
+        SELECT 1 
+        FROM lab13db1.dbo.TypeOfAgreement AS type
+        RIGHT JOIN inserted ON inserted.TypeOfAgreementName = type.Name
+        WHERE type.Name IS NULL -- Если в TypeOfAgreement нет соответствующего типа соглашения
+    )
+    BEGIN
+        RAISERROR('При вставке необходимо выбрать существующий тип соглашения', 16, 1);
+        ROLLBACK;
+    END
+END
+go
 
-USE lab13db1;
-GO
 
-DROP VIEW IF EXISTS RENTAL_VIEW;
-GO
+USE lab13db1
+go
 
-CREATE VIEW RENTAL_VIEW AS
-SELECT
-    C.name AS client_name,
-    C.email AS client_email,
-    E.name AS equipment_name,
-    E.serial_number AS equipment_serial,
-    R.start_date,
-    R.end_date
-FROM RENTAL R
-JOIN CLIENT C ON R.client_id = C.client_id
-JOIN lab13db2.dbo.EQUIPMENT_ITEM E ON R.equipment_id = E.equipment_id;
-GO
+INSERT INTO TypeOfAgreement (Name, Description, AgreementDuration, DepositRequired) VALUES
+(N'Ежедневная аренда', N'Аренда на один день', 1, 1),  -- 1 день аренды, требуется залог
+(N'Сезонная аренда', N'Аренда на весь сезон', 90, 1),  -- 90 дней аренды, требуется залог
+(N'Экспресс-аренда', N'Аренда на 3 часа', 0, 0);        -- 3 часа аренды, без залога
+go
 
--- 6) Тестовые данные
+SELECT * FROM TypeOfAgreement;
+go
 
-USE lab13db1;
-GO
+USE lab13db2
+go
 
-INSERT INTO CLIENT (name, email) VALUES 
-('Иван Иванов', 'ivan@gmail.com'),
-('Анна Смирнова', 'anna@gmail.com');
+INSERT INTO Agreement (Name, StartTime, EndTime, TypeOfAgreementName, CustomerID, TotalAmount, DepositAmount, AgreementStatus) VALUES
+(N'Аренда на 1 день', '2024-12-24', '2024-12-24', N'Ежедневная аренда', 1, 1500.0, 500.0, N'Активно'),
+(N'Аренда на сезон', '2024-12-01', '2025-03-01', N'Сезонная аренда', 2, 5000.0, 1500.0, N'Активно');
+go
 
-USE lab13db2;
-GO
+SELECT * FROM AgreementView;
+go
 
-INSERT INTO EQUIPMENT_ITEM (name, serial_number, category) VALUES 
-('Лыжи Atomic', 'SN12345', 'ski'),
-('Сноуборд Burton', 'SN54321', 'snowboard'),
-('Ботинки Salomon', 'SN67890', 'boots');
-GO
 
--- Добавление аренды
-USE lab13db1;
-GO
 
-INSERT INTO RENTAL (client_id, equipment_id, start_date)
-VALUES (1, 1, '2024-06-23');
-GO
 
--- Просмотр данных
-SELECT * FROM RENTAL_VIEW;
-GO
 
+--1. Тестирование триггера TypeOfAgreement_delete_trg
+INSERT INTO Agreement (Name, StartTime, EndTime, TypeOfAgreementName, CustomerID, TotalAmount, DepositAmount, AgreementStatus) 
+VALUES (N'Аренда на 1 день', '2024-12-24', '2024-12-24', N'Ежедневная аренда', 1, 1500.0, 500.0, N'Активно');
+
+USE lab13db1
+go
+
+DELETE FROM TypeOfAgreement WHERE Name = N'Ежедневная аренда';
+
+use lab13db2
+go
+
+SELECT * FROM Agreement WHERE TypeOfAgreementName = N'Ежедневная аренда';
+
+
+
+use lab13db1
+go
+--2. Тестирование триггера TypeOfAgreement_update_trg
+UPDATE TypeOfAgreement
+SET Name = N'Экспресс-аренда 2'
+WHERE Name = N'Экспресс-аренда';
+
+
+SELECT * FROM TypeOfAgreement WHERE Name = N'Экспресс-аренда';
+
+
+-- Попробуем вставить новое соглашение с несуществующим типом соглашения
+INSERT INTO lab13db2.dbo.Agreement (Name, StartTime, EndTime, TypeOfAgreementName, CustomerID, TotalAmount, DepositAmount, AgreementStatus)
+VALUES (N'Аренда на 1 день', '2024-12-24', '2024-12-24', N'Не существующий тип аренды', 1, 1500.0, 500.0, N'Активно');
+
+
+-- Попробуем обновить тип соглашения на несуществующий тип
+UPDATE lab13db2.dbo.Agreement
+SET TypeOfAgreementName = N'Не существующий тип аренды'
+WHERE Name = N'Аренда на 1 день';
+
+
+-- Проверим вставленные данные
+SELECT * FROM lab13db2.dbo.Agreement;
+
+
+-- Вставим новые записи
+INSERT INTO lab13db2.dbo.Agreement (Name, StartTime, EndTime, TypeOfAgreementName, CustomerID, TotalAmount, DepositAmount, AgreementStatus)
+VALUES (N'Аренда на 1 день', '2024-12-24', '2024-12-24', N'Ежедневная аренда', 1, 1500.0, 500.0, N'Активно'),
+       (N'Аренда на сезон', '2024-12-01', '2025-03-01', N'Сезонная аренда', 2, 5000.0, 1500.0, N'Активно');
+
+-- Проверим вставленные данные
+SELECT * FROM lab13db2.dbo.Agreement;
