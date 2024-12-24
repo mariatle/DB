@@ -1,177 +1,163 @@
-USE master;
-GO
+USE lab13db1
+go
 
--- Удаление существующих баз данных
-DROP DATABASE IF EXISTS RENTAL;
-DROP DATABASE IF EXISTS EQUIPMENT;
-GO
+IF OBJECT_ID(N'TypeOfCustomer') IS NOT NULL
+	DROP TABLE TypeOfCustomer;
+go
 
--- Создание баз данных
-CREATE DATABASE RENTAL;
-CREATE DATABASE EQUIPMENT;
-GO
-
--- Таблицы в базе RENTAL
-USE RENTAL;
-GO
-
-DROP TABLE IF EXISTS CLIENT;
-GO
-
-CREATE TABLE CLIENT (
-    client_id INT IDENTITY(1, 1) PRIMARY KEY,
-    name NVARCHAR(100) NOT NULL,
-    email NVARCHAR(100) UNIQUE NOT NULL,
-    max_rentals TINYINT DEFAULT 3 -- Максимум 3 аренды одновременно
+CREATE TABLE TypeOfCustomer(
+	Name NVarChar(100) PRIMARY KEY NOT NULL,
+	Description NVarChar(500),
 );
-GO
 
-DROP TABLE IF EXISTS RENTAL;
-GO
+USE lab13db2
+go
 
-CREATE TABLE RENTAL (
-    rental_id INT IDENTITY(1, 1) PRIMARY KEY,
-    client_id INT NOT NULL,
-    equipment_id INT NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NULL,
-    FOREIGN KEY (client_id) REFERENCES CLIENT(client_id)
+IF OBJECT_ID(N'Customer') IS NOT NULL
+	DROP TABLE Customer;
+go
+
+CREATE TABLE Customer(
+	ID INT IDENTITY(1,1) PRIMARY KEY  NOT NULL, 
+	Name NVarChar(100) NOT NULL,
+	StartTime SmallDateTime NOT NULL DEFAULT GETDATE(),
+	EndTime SmallDateTime NULL,
+	Coef FLOAT NULL,
+	HoursOfRent FLOAT NULL,
 );
+go
+
+-- 2. Создать необходимые элементы базы данных (представления, триггеры), обеспечивающие работу
+-- с данными связанных таблиц (выборку, вставку, изменение, удаление).
+
+IF OBJECT_ID(N'CustomerView') IS NOT NULL
+	DROP VIEW CustomerView;
+go
+
+CREATE VIEW CustomerView AS
+	SELECT f.ID, f.Name, s.Description, f.StartTime, f.EndTime, f.Coef, f.HoursOfRent FROM Customer as f INNER JOIN lab13db1.dbo.TypeOfCustomer as s ON f.Name = s.Name
+go
+
+USE lab13db1
+go
+
+IF OBJECT_ID(N'Type_delete_trg') IS NOT NULL
+	DROP TRIGGER Type_delete_trg;
+go
+
+IF OBJECT_ID(N'Type_update_trg') IS NOT NULL
+	DROP TRIGGER Type_update_trg;
+go
+
+
+CREATE TRIGGER Type_delete_trg ON TypeOfCustomer
+FOR DELETE AS
+	DELETE Customer FROM lab13db2.dbo.Customer AS Customer
+		INNER JOIN deleted ON Customer.Name= deleted.Name
 GO
 
--- Таблицы в базе EQUIPMENT
-USE EQUIPMENT;
+CREATE TRIGGER Type_update_trg ON TypeOfCustomer
+FOR UPDATE AS 
+	IF UPDATE(Name)
+	BEGIN
+        RAISERROR('Нельзя менять название у созданного типа работы', 16, 1);
+		ROLLBACK;
+    END
+go
+
+USE lab13db2
+go
+
+
+IF OBJECT_ID(N'Customer_insert_trg') IS NOT NULL
+	DROP TRIGGER Customer_insert_trg;
+go
+
+IF OBJECT_ID(N'Customer_update_trg') IS NOT NULL
+	DROP TRIGGER Customer_update_trg;
+go
+
+
+CREATE TRIGGER Customer_update_trg ON Customer
+FOR UPDATE AS 
+	IF UPDATE(Name) AND 
+		EXISTS (SELECT 1 FROM lab13db1.dbo.TypeOfCustomer as type RIGHT JOIN inserted ON inserted.Name = type.Name WHERE type.Name IS NULL) -- фикс
+	BEGIN
+        RAISERROR('При обновлении необходимо выбрать существующий тип работы', 16, 1);
+		ROLLBACK;
+    END
+go
+
+CREATE TRIGGER Customer_insert_trg ON Customer
+FOR INSERT AS
+	IF EXISTS (SELECT 1 FROM lab13db1.dbo.TypeOfCustomer as type RIGHT JOIN inserted ON inserted.Name = type.Name WHERE type.Name IS NULL) -- фикс
+	BEGIN
+		RAISERROR('При вставке необходимо выбрать существующий тип работы', 16, 1);
+		ROLLBACK;
+	END
 GO
 
-DROP TABLE IF EXISTS EQUIPMENT_ITEM;
-GO
+USE lab13db1
+go
 
-CREATE TABLE EQUIPMENT_ITEM (
-    equipment_id INT IDENTITY(1, 1) PRIMARY KEY,
-    name NVARCHAR(50) NOT NULL,
-    serial_number NVARCHAR(20) UNIQUE NOT NULL,
-    category NVARCHAR(20) NOT NULL CHECK (category IN ('ski', 'snowboard', 'boots')), -- Категории снаряжения
-    status NVARCHAR(10) DEFAULT 'available' CHECK (status IN ('available', 'rented')) -- Статус снаряжения
-);
-GO
+INSERT INTO TypeOfCustomer VALUES
+(N'Прокат лыж', N'Аренда комплекта лыж для катания по трассе'),
+(N'Прокат сноуборда', N'Замена масла на масло Castrol'),
+(N'Прокат горнолыжных ботинок', N'Аренда ботинок для лыжных комплексов')
+go
 
--- Триггеры в базе RENTAL
-USE RENTAL;
-GO
 
--- Ограничение на максимальное количество аренд у клиента
-CREATE TRIGGER OnInsertRental
-ON RENTAL
-INSTEAD OF INSERT
-AS
-BEGIN
-    DECLARE @client_id INT, @equipment_id INT, @start_date DATE;
+SELECT * FROM TypeOfCustomer;
+go
 
-    SELECT @client_id = client_id, @equipment_id = equipment_id, @start_date = start_date
-    FROM inserted;
+USE lab13db2
+go
 
-    -- Проверка существования клиента
-    IF NOT EXISTS (SELECT 1 FROM CLIENT WHERE client_id = @client_id)
-        RAISERROR('Клиент не найден.', 11, 1);
+INSERT INTO Customer (Name, Coef, HoursOfRent) VALUES
+(N'Прокат лыж', 1, 2.0),
+(N'Прокат сноуборда', 2, 2.0);
+go
 
-    -- Проверка доступности снаряжения
-    IF NOT EXISTS (SELECT 1 FROM EQUIPMENT.dbo.EQUIPMENT_ITEM WHERE equipment_id = @equipment_id AND status = 'available')
-        RAISERROR('Снаряжение недоступно для аренды.', 11, 1);
+SELECT * FROM CustomerView;
+go
 
-    -- Проверка текущего количества аренд у клиента
-    DECLARE @current_rentals INT;
-    SELECT @current_rentals = COUNT(*)
-    FROM RENTAL
-    WHERE client_id = @client_id AND end_date IS NULL;
+--проверка триггеров TypeOfCustomer
+UPDATE lab13db1.dbo.TypeOfCustomer SET Name = N'Обновлённое название' WHERE Name = N'Прокат лыж';
+go
 
-    DECLARE @max_rentals TINYINT;
-    SELECT @max_rentals = max_rentals FROM CLIENT WHERE client_id = @client_id;
+UPDATE lab13db1.dbo.TypeOfCustomer SET Description = N'Обновлённое описание' WHERE Name = N'Прокат лыж';
+go
 
-    IF @current_rentals >= @max_rentals
-        RAISERROR('Превышено максимальное количество аренд для клиента.', 11, 1);
+SELECT * FROM CustomerView;
+go
 
-    -- Добавление аренды
-    INSERT INTO RENTAL (client_id, equipment_id, start_date)
-    VALUES (@client_id, @equipment_id, @start_date);
+DELETE FROM lab13db1.dbo.TypeOfCustomer WHERE Name = N'Прокат лыж';
+go
 
-    -- Обновление статуса снаряжения
-    UPDATE EQUIPMENT.dbo.EQUIPMENT_ITEM
-    SET status = 'rented'
-    WHERE equipment_id = @equipment_id;
-END;
-GO
+SELECT * FROM CustomerView;
+go
 
--- Триггер для завершения аренды
-CREATE TRIGGER OnUpdateRental
-ON RENTAL
-INSTEAD OF UPDATE
-AS
-BEGIN
-    DECLARE @rental_id INT, @end_date DATE;
+--проверка триггеров Customer
+INSERT INTO Customer (Name, Coef, HoursOfRent) VALUES
+(N'Несуществующее название', 1, 2.0),
+(N'Прокат горнолыжных ботинок', 1, 2.0);
+go -- это ломает
 
-    SELECT @rental_id = rental_id, @end_date = end_date
-    FROM inserted;
+SELECT * FROM Customer;
+go
 
-    -- Завершение аренды
-    UPDATE RENTAL
-    SET end_date = @end_date
-    WHERE rental_id = @rental_id;
+UPDATE Customer SET Name = N'Прокат сноуборда' WHERE Name = N'Прокат горнолыжных ботинок';
+go
 
-    -- Обновление статуса снаряжения
-    DECLARE @equipment_id INT;
-    SELECT @equipment_id = equipment_id FROM RENTAL WHERE rental_id = @rental_id;
+SELECT * FROM lab13db1.dbo.TypeOfCustomer;
+go
 
-    UPDATE EQUIPMENT.dbo.EQUIPMENT_ITEM
-    SET status = 'available'
-    WHERE equipment_id = @equipment_id;
-END;
-GO
+SELECT * FROM CustomerView;
+go
 
--- Представление для удобства работы
-USE RENTAL;
-GO
+UPDATE Customer SET Name = N'Прокат горнолыжных ботинок' WHERE ID = 2;
+go
 
-DROP VIEW IF EXISTS RENTAL_VIEW;
-GO
+SELECT * FROM CustomerView;
+go
 
-CREATE VIEW RENTAL_VIEW AS
-SELECT
-    C.name AS client_name,
-    C.email AS client_email,
-    E.name AS equipment_name,
-    E.serial_number AS equipment_serial,
-    R.start_date,
-    R.end_date
-FROM RENTAL R
-JOIN CLIENT C ON R.client_id = C.client_id
-JOIN EQUIPMENT.dbo.EQUIPMENT_ITEM E ON R.equipment_id = E.equipment_id;
-GO
-
--- Тестовые данные
-USE RENTAL;
-GO
-
-INSERT INTO CLIENT (name, email) VALUES 
-('Иван Иванов', 'ivan@gmail.com'),
-('Анна Смирнова', 'anna@gmail.com');
-
-USE EQUIPMENT;
-GO
-
-INSERT INTO EQUIPMENT_ITEM (name, serial_number, category) VALUES 
-('Лыжи Atomic', 'SN12345', 'ski'),
-('Сноуборд Burton', 'SN54321', 'snowboard'),
-('Ботинки Salomon', 'SN67890', 'boots');
-GO
-
--- Добавление аренды
-USE RENTAL;
-GO
-
-INSERT INTO RENTAL (client_id, equipment_id, start_date)
-VALUES (1, 1, '2024-06-23');
-GO
-
--- Просмотр данных
-SELECT * FROM RENTAL_VIEW;
-GO
