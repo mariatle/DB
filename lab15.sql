@@ -1,218 +1,192 @@
 USE lab13db1
-go
+GO
 
-IF OBJECT_ID(N'TypeOfAgreement') IS NOT NULL
-	DROP TABLE TypeOfAgreement;
-go
+IF OBJECT_ID(N'EquipmentType') IS NOT NULL
+	DROP TABLE EquipmentType;
+GO
 
-CREATE TABLE TypeOfAgreement(
+CREATE TABLE EquipmentType(
 	Name NVarChar(100) PRIMARY KEY NOT NULL,
-	Description NVarChar(500),
-	AgreementDuration INT NULL,  -- Продолжительность аренды в днях
-	DepositRequired BIT NULL
+	Description NVarChar(500)
 );
+GO
 
 USE lab13db2
-go
+GO
 
-IF OBJECT_ID(N'Agreement') IS NOT NULL
-	DROP TABLE Agreement;
-go
+IF OBJECT_ID(N'EquipmentRental') IS NOT NULL
+	DROP TABLE EquipmentRental;
+GO
 
-CREATE TABLE Agreement(
-	ID INT IDENTITY(1,1) PRIMARY KEY NOT NULL, 
+CREATE TABLE EquipmentRental(
+	ID INT IDENTITY(1,1) PRIMARY KEY NOT NULL,
 	Name NVarChar(100) NOT NULL,
 	StartTime SmallDateTime NOT NULL DEFAULT GETDATE(),
 	EndTime SmallDateTime NULL,
-	TypeOfAgreementName NVarChar(100) NOT NULL,  -- Ссылка на тип соглашения
-	CustomerID INT NOT NULL,                    -- Идентификатор клиента
-	TotalAmount FLOAT NULL,                     -- Общая сумма аренды
-	DepositAmount FLOAT NULL,                   -- Сумма залога
-	AgreementStatus NVarChar(50) NULL           -- Статус соглашения (например, "Активно", "Завершено")
+	HoursRented FLOAT NULL
 );
-go
+GO
 
-USE lab13db2
-go
+-- Создание представления
+IF OBJECT_ID(N'RentalView') IS NOT NULL
+	DROP VIEW RentalView;
+GO
 
-IF OBJECT_ID(N'AgreementView') IS NOT NULL
-	DROP VIEW AgreementView;
-go
+CREATE VIEW RentalView AS
+	SELECT r.ID, r.Name, e.Description, r.StartTime, r.EndTime, r.HoursRented 
+	FROM EquipmentRental AS r 
+	INNER JOIN lab13db1.dbo.EquipmentType AS e ON r.Name = e.Name;
+GO
 
-CREATE VIEW AgreementView AS
-	SELECT 
-		a.ID, 
-		a.Name, 
-		a.StartTime, 
-		a.EndTime, 
-		a.TotalAmount, 
-		a.DepositAmount, 
-		a.AgreementStatus, 
-		t.Description AS TypeOfAgreementDescription, 
-		t.AgreementDuration, 
-		t.DepositRequired
-	FROM Agreement AS a
-	INNER JOIN lab13db1.dbo.TypeOfAgreement AS t 
-		ON a.TypeOfAgreementName = t.Name;
-go
-
-select * from AgreementView
+select * from RentalView
 
 USE lab13db1
-go
+GO
 
-IF OBJECT_ID(N'Type_delete_trg') IS NOT NULL
-	DROP TRIGGER Type_delete_trg;
-go
+-- Создание триггеров для таблицы EquipmentType
+IF OBJECT_ID(N'EquipmentType_delete_trg') IS NOT NULL
+	DROP TRIGGER EquipmentType_delete_trg;
+GO
 
-IF OBJECT_ID(N'Type_update_trg') IS NOT NULL
-	DROP TRIGGER Type_update_trg;
-go
+IF OBJECT_ID(N'EquipmentType_update_trg') IS NOT NULL
+	DROP TRIGGER EquipmentType_update_trg;
+GO
 
 
-CREATE TRIGGER TypeOfAgreement_delete_trg 
-ON lab13db1.dbo.TypeOfAgreement
+-- срабатывает при удалении записи из EquipmentType, удаляет все записи в таблице EquipmentRental где тип совп с удаляемым
+CREATE TRIGGER EquipmentType_delete_trg ON EquipmentType
 FOR DELETE AS
-BEGIN
-    DELETE a
-    FROM lab13db2.dbo.Agreement AS a
-    INNER JOIN deleted AS d
-    ON a.TypeOfAgreementName = d.Name;
-END
-go
+	DELETE rental 
+	FROM lab13db2.dbo.EquipmentRental AS rental
+	INNER JOIN deleted ON rental.Name = deleted.Name;
+GO
 
-CREATE TRIGGER TypeOfAgreement_update_trg
-ON lab13db1.dbo.TypeOfAgreement
+CREATE TRIGGER EquipmentType_update_trg ON EquipmentType
 FOR UPDATE AS
-BEGIN
-    IF UPDATE(Name)
-    BEGIN
-        RAISERROR('Нельзя менять название у созданного типа соглашения', 16, 1);
-        ROLLBACK;
-    END
-END
-go
+	IF UPDATE(Name)
+	BEGIN
+        RAISERROR('Название типа нельзя изменить!!!!!!!!!', 16, 1);
+		ROLLBACK;
+    END;
+GO
 
 USE lab13db2
-go
+GO
 
-IF OBJECT_ID(N'Agreement_insert_trg') IS NOT NULL
-	DROP TRIGGER Agreement_insert_trg;
-go
+-- Создание триггеров для таблицы EquipmentRental
+IF OBJECT_ID(N'EquipmentRental_insert_trg') IS NOT NULL
+	DROP TRIGGER EquipmentRental_insert_trg;
+GO
 
-IF OBJECT_ID(N'Agreement_update_trg') IS NOT NULL
-	DROP TRIGGER Agreement_update_trg;
-go
+IF OBJECT_ID(N'EquipmentRental_update_trg') IS NOT NULL
+	DROP TRIGGER EquipmentRental_update_trg;
+GO
 
--- Триггер для обновления данных в Agreement
-CREATE TRIGGER Agreement_update_trg ON Agreement
-FOR UPDATE AS
-BEGIN
-    IF UPDATE(TypeOfAgreementName) 
-    AND EXISTS (
-        SELECT 1 
-        FROM lab13db1.dbo.TypeOfAgreement AS type
-        RIGHT JOIN inserted ON inserted.TypeOfAgreementName = type.Name
-        WHERE type.Name IS NULL -- Если в TypeOfAgreement нет соответствующего типа соглашения
-    )
-    BEGIN
-        RAISERROR('При обновлении необходимо выбрать существующий тип соглашения', 16, 1);
-        ROLLBACK;
-    END
-END
-go
 
--- Триггер для вставки данных в Agreement
-CREATE TRIGGER Agreement_insert_trg ON Agreement
+-- чек сущ-т ли указанный тип оборудования в таблице EquipmentType, если такого типа нет, то вставка откатывается.
+CREATE TRIGGER EquipmentRental_insert_trg ON EquipmentRental
 FOR INSERT AS
-BEGIN
-    IF EXISTS (
-        SELECT 1 
-        FROM lab13db1.dbo.TypeOfAgreement AS type
-        RIGHT JOIN inserted ON inserted.TypeOfAgreementName = type.Name
-        WHERE type.Name IS NULL -- Если в TypeOfAgreement нет соответствующего типа соглашения
-    )
-    BEGIN
-        RAISERROR('При вставке необходимо выбрать существующий тип соглашения', 16, 1);
-        ROLLBACK;
-    END
-END
-go
+	IF EXISTS (SELECT 1 FROM lab13db1.dbo.EquipmentType AS type 
+		RIGHT JOIN inserted ON inserted.Name = type.Name 
+		WHERE type.Name IS NULL
+	)
+	BEGIN
+		RAISERROR('При добавлении необходимо указать существующий тип оборудования.', 16, 1);
+		ROLLBACK;
+	END;
+GO
 
+-- если апд тип оборудования и он не сущ-т в таблице EquipmentType, операция откатывается
+CREATE TRIGGER EquipmentRental_update_trg ON EquipmentRental
+FOR UPDATE AS
+	IF UPDATE(Name) AND EXISTS ( -- чек, была ли изменена колонка Name в таблице EquipmentRental, если апд, то true
+			SELECT 1 
+			FROM lab13db1.dbo.EquipmentType AS type 
+			RIGHT JOIN inserted ON inserted.Name = type.Name   --все записи из inserted, для которых нет соответствующего типа оборудования в EquipmentType
+			WHERE type.Name IS NULL
+		)
+	BEGIN
+        RAISERROR('Обновление возможно только с существующим типом оборудования.', 16, 1);
+		ROLLBACK;
+    END;
+GO
 
 USE lab13db1
-go
+GO
 
-INSERT INTO TypeOfAgreement (Name, Description, AgreementDuration, DepositRequired) VALUES
-(N'Ежедневная аренда', N'Аренда на один день', 1, 1),  -- 1 день аренды, требуется залог
-(N'Сезонная аренда', N'Аренда на весь сезон', 90, 1),  -- 90 дней аренды, требуется залог
-(N'Экспресс-аренда', N'Аренда на 3 часа', 0, 0);        -- 3 часа аренды, без залога
-go
 
-SELECT * FROM TypeOfAgreement;
-go
+INSERT INTO EquipmentType VALUES
+(N'Горные лыжи', N'Комплект горных лыж с палками'),
+(N'Сноуборд', N'Комплект сноуборда с креплениями и ботинками'),
+(N'Шлем', N'Защитный шлем для зимних видов спорта');
+GO
+
+SELECT * FROM EquipmentType;
+GO
 
 USE lab13db2
-go
-
-INSERT INTO Agreement (Name, StartTime, EndTime, TypeOfAgreementName, CustomerID, TotalAmount, DepositAmount, AgreementStatus) VALUES
-(N'Аренда на 1 день', '2024-12-24', '2024-12-24', N'Ежедневная аренда', 1, 1500.0, 500.0, N'Активно'),
-(N'Аренда на сезон', '2024-12-01', '2025-03-01', N'Сезонная аренда', 2, 5000.0, 1500.0, N'Активно');
-go
-
-SELECT * FROM AgreementView;
-go
+GO
 
 
+INSERT INTO EquipmentRental (Name, HoursRented) VALUES
+(N'Горные лыжи', 4.0),
+(N'Сноуборд', 3.0);
+GO
+
+SELECT * FROM RentalView;
+GO
 
 
+UPDATE lab13db1.dbo.EquipmentType 
+SET Name = N'Обновлённое название' 
+WHERE Name = N'Горные лыжи';
+GO
 
---1. Тестирование триггера TypeOfAgreement_delete_trg
-INSERT INTO Agreement (Name, StartTime, EndTime, TypeOfAgreementName, CustomerID, TotalAmount, DepositAmount, AgreementStatus) 
-VALUES (N'Аренда на 1 день', '2024-12-24', '2024-12-24', N'Ежедневная аренда', 1, 1500.0, 500.0, N'Активно');
+UPDATE lab13db1.dbo.EquipmentType 
+SET Description = N'Обновлённое описание' 
+WHERE Name = N'Горные лыжи';
+GO
 
-USE lab13db1
-go
+DELETE FROM lab13db1.dbo.EquipmentType 
+WHERE Name = N'Горные лыжи';
+GO
 
-DELETE FROM TypeOfAgreement WHERE Name = N'Ежедневная аренда';
+SELECT * FROM RentalView;
+GO
 
-use lab13db2
-go
+-- Проверка триггеров EquipmentRental
+INSERT INTO EquipmentRental (Name, HoursRented) VALUES
+(N'Кринж название', 2.0),
+(N'Шлем', 1.0);
+GO
 
-SELECT * FROM Agreement WHERE TypeOfAgreementName = N'Ежедневная аренда';
+SELECT * FROM EquipmentRental;
+GO
 
+UPDATE EquipmentRental 
+SET Name = N'Шлем' 
+WHERE Name = N'Сноуборд';
+GO
 
+SELECT * FROM lab13db1.dbo.EquipmentType;
+GO
 
-use lab13db1
-go
---2. Тестирование триггера TypeOfAgreement_update_trg
-UPDATE TypeOfAgreement
-SET Name = N'Экспресс-аренда 2'
-WHERE Name = N'Экспресс-аренда';
+SELECT * FROM RentalView;
+GO
 
+UPDATE EquipmentRental 
+SET Name = N'Амням' 
+WHERE ID = 2;
+GO
 
-SELECT * FROM TypeOfAgreement WHERE Name = N'Экспресс-аренда';
-
-
--- Попробуем вставить новое соглашение с несуществующим типом соглашения
-INSERT INTO lab13db2.dbo.Agreement (Name, StartTime, EndTime, TypeOfAgreementName, CustomerID, TotalAmount, DepositAmount, AgreementStatus)
-VALUES (N'Аренда на 1 день', '2024-12-24', '2024-12-24', N'Не существующий тип аренды', 1, 1500.0, 500.0, N'Активно');
-
-
--- Попробуем обновить тип соглашения на несуществующий тип
-UPDATE lab13db2.dbo.Agreement
-SET TypeOfAgreementName = N'Не существующий тип аренды'
-WHERE Name = N'Аренда на 1 день';
-
-
--- Проверим вставленные данные
-SELECT * FROM lab13db2.dbo.Agreement;
+select * from EquipmentRental
+SELECT * FROM lab13db1.dbo.EquipmentType;
 
 
--- Вставим новые записи
-INSERT INTO lab13db2.dbo.Agreement (Name, StartTime, EndTime, TypeOfAgreementName, CustomerID, TotalAmount, DepositAmount, AgreementStatus)
-VALUES (N'Аренда на 1 день', '2024-12-24', '2024-12-24', N'Ежедневная аренда', 1, 1500.0, 500.0, N'Активно'),
-       (N'Аренда на сезон', '2024-12-01', '2025-03-01', N'Сезонная аренда', 2, 5000.0, 1500.0, N'Активно');
+UPDATE EquipmentRental 
+SET Name = N'Шлем' 
+WHERE ID = 2;
+GO
 
--- Проверим вставленные данные
-SELECT * FROM lab13db2.dbo.Agreement;
+SELECT * FROM RentalView;
+GO
