@@ -101,7 +101,7 @@ BEGIN
 END;
 GO
 
--- Создаём таблицу для логирования удаления
+
 IF OBJECT_ID(N'EquipmentLog') IS NULL
 CREATE TABLE EquipmentLog (
     LogID INT IDENTITY(1,1),
@@ -111,7 +111,7 @@ CREATE TABLE EquipmentLog (
 );
 GO
 
-SELECT * FROM EquipmentLog
+
 
 CREATE TRIGGER TRG_Equipment_Delete
 ON Equipment
@@ -255,12 +255,12 @@ ON EquipmentWithWarranty
 INSTEAD OF INSERT
 AS
 BEGIN
-    -- Вставляем в Equipment
+    
     INSERT INTO Equipment (Name, Size, PricePerHour, Condition, IsAvailable)
     SELECT Name, Size, PricePerHour, Condition, IsAvailable
     FROM inserted;
 
-    -- Вставляем в EquipmentWarranty
+    
     INSERT INTO EquipmentWarranty (EquipmentID, WarrantyStartDate, WarrantyEndDate, WarrantyDetails)
     SELECT e.EquipmentID, i.WarrantyStartDate, i.WarrantyEndDate, i.WarrantyDetails
     FROM inserted i
@@ -277,24 +277,31 @@ ON EquipmentWithWarranty
 INSTEAD OF UPDATE
 AS
 BEGIN
-    -- Обновляем Equipment
-    UPDATE Equipment
-    SET 
-        Name = i.Name, Size = i.Size, PricePerHour = i.PricePerHour,
-        Condition = i.Condition, IsAvailable = i.IsAvailable
-    FROM Equipment e
-    INNER JOIN inserted i ON e.EquipmentID = i.EquipmentID;
+    IF UPDATE(EquipmentID)
+	    BEGIN
+		    RAISERROR('Изменение EquipmentID forbidden.', 16, 1);
+		END
+		ELSE
+		BEGIN
+            UPDATE Equipment
+		SET 
+			Name = i.Name, Size = i.Size, PricePerHour = i.PricePerHour,
+			Condition = i.Condition, IsAvailable = i.IsAvailable
+		FROM Equipment e
+		INNER JOIN inserted i ON e.EquipmentID = i.EquipmentID;
 
-    -- Обновляем EquipmentWarranty
-    UPDATE EquipmentWarranty
-    SET 
-        WarrantyStartDate = i.WarrantyStartDate,
-        WarrantyEndDate = i.WarrantyEndDate,
-        WarrantyDetails = i.WarrantyDetails
-    FROM EquipmentWarranty ew
-    INNER JOIN inserted i ON ew.EquipmentID = i.EquipmentID;
+    
+		UPDATE EquipmentWarranty
+		SET 
+			WarrantyStartDate = i.WarrantyStartDate,
+			WarrantyEndDate = i.WarrantyEndDate,
+			WarrantyDetails = i.WarrantyDetails
+		FROM EquipmentWarranty ew
+		INNER JOIN inserted i ON ew.EquipmentID = i.EquipmentID;
+	END
 END;
 GO
+    
 
 IF OBJECT_ID(N'TRG_EquipmentWithWarranty_Delete') IS NOT NULL
     DROP TRIGGER TRG_EquipmentWithWarranty_Delete;
@@ -310,22 +317,17 @@ BEGIN
 END;
 GO
 
-SELECT * FROM Equipment
-SELECT * FROM EquipmentWarranty
-SELECT * FROM EquipmentWithWarranty
+
 
 -- Тест вставки через представление
 INSERT INTO EquipmentWithWarranty (Name, Size, PricePerHour, Condition, IsAvailable, WarrantyStartDate, WarrantyEndDate, WarrantyDetails)
 VALUES ('New Ski Set', '180 cm', 30.0, 'Excellent', 0, '2024-12-01', '2025-12-01', N'1-year full warranty');
 
--- Проверка данных в Equipment
-SELECT * FROM Equipment WHERE Name = 'New Ski Set';
 
--- Проверка данных в EquipmentWarranty
+SELECT * FROM Equipment WHERE Name = 'New Ski Set';
 SELECT * FROM EquipmentWarranty WHERE EquipmentID = (SELECT EquipmentID FROM Equipment WHERE Name = 'New Ski Set');
 
 
-----------------------------------------------------------------------------
 -- Тест обновления через представление
 UPDATE EquipmentWithWarranty
 SET 
@@ -334,33 +336,24 @@ SET
     WarrantyDetails = N'Updated warranty details'
 WHERE EquipmentID = 1;
 
--- Проверка данных в Equipment
-SELECT * FROM Equipment WHERE EquipmentID = 1;
 
--- Проверка данных в EquipmentWarranty
+SELECT * FROM Equipment WHERE EquipmentID = 1;
 SELECT * FROM EquipmentWarranty WHERE EquipmentID = 1;
 
 
-SELECT * FROM Equipment
-SELECT * FROM EquipmentWarranty
-
-SELECT * FROM EquipmentWithWarranty
 
 -- Тест удаления через представление
-DELETE FROM EquipmentWithWarranty WHERE EquipmentID = 15;
+DELETE FROM EquipmentWithWarranty WHERE EquipmentID = 14;
 
-SELECT * FROM Equipment
-SELECT * FROM EquipmentWarranty
 SELECT * FROM EquipmentWithWarranty
 
--- Проверка, что данные удалены из Equipment
-SELECT * FROM Equipment WHERE EquipmentID = 15;
 
--- Проверка, что данные удалены из EquipmentWarranty
-SELECT * FROM EquipmentWarranty WHERE EquipmentID = 15;
+SELECT * FROM Equipment WHERE EquipmentID = 14;
+SELECT * FROM EquipmentWarranty WHERE EquipmentID = 14;
 
-
-
+SELECT * FROM EquipmentWarranty
+update EquipmentWarranty set WarrantyDetails=WarrantyDetails + 'x', EquipmentID=EquipmentID+1
+SELECT * FROM EquipmentWarranty			
 
 -- Проверка согласованности данных
 SELECT e.EquipmentID, ew.EquipmentID
@@ -379,6 +372,4 @@ SELECT 'Missing in EquipmentWarranty' AS Issue, e.EquipmentID
 FROM Equipment e
 LEFT JOIN EquipmentWarranty ew ON e.EquipmentID = ew.EquipmentID
 WHERE ew.EquipmentID IS NULL;
-
-
 
